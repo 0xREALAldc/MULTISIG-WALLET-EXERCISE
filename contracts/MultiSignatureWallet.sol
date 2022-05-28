@@ -15,6 +15,11 @@ contract MultiSignatureWallet {
     bytes data;
   }
 
+  struct TransactionStatus {
+    mapping (address => bool) ownersConfirmations;
+    uint confirmationCount;
+  }
+
   address[] public owners;
   uint public required;
   mapping (address => bool) public isOwner; 
@@ -22,7 +27,7 @@ contract MultiSignatureWallet {
   uint public transactionCount;
   mapping (uint => Transaction) public transactions;
 
-  mapping (uint => mapping (address => bool)) public confirmations;
+  mapping (uint => TransactionStatus) public confirmations;
 
   /// @dev Fallback function allows to deposit ether.
   function() external payable {
@@ -70,9 +75,10 @@ contract MultiSignatureWallet {
   function confirmTransaction(uint transactionId) public {
     require(isOwner[msg.sender]);
     require(transactions[transactionId].destination != address(0));
-    require(confirmations[transactionId][msg.sender] == false);
+    require(confirmations[transactionId].ownersConfirmations[msg.sender] == false);
 
-    confirmations[transactionId][msg.sender] = true;
+    confirmations[transactionId].ownersConfirmations[msg.sender] = true;
+    confirmations[transactionId].confirmationCount += 1;
 
     emit Confirmation(msg.sender, transactionId);
 
@@ -108,13 +114,8 @@ contract MultiSignatureWallet {
   /// @param transactionId Transaction ID.
   /// @return Confirmation status.
   function isConfirmed(uint transactionId) internal view returns (bool) {
-    uint count = 0;
-    for (uint i = 0; i < owners.length; i++) {
-      if (confirmations[transactionId][owners[i]]) 
-        count += 1;
-      if (count == required) 
-        return true;
-    }
+    if (confirmations[transactionId].confirmationCount == required) 
+      return true;
   }
 
   /// @dev Adds a new transaction to the transaction mapping, if transaction does not exist yet.
